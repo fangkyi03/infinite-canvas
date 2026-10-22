@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { createVideoGenerationTask, isVideoTaskFailed, storeGeneratedVideo, waitForVideoGenerationTask } from "@/services/api/video";
-import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { defaultConfig, encodeChannelModel, modelOptionName, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { ensureImagePreview, uploadImage } from "@/services/image-storage";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
@@ -338,7 +338,16 @@ function InfiniteCanvasPage() {
             videoPollIdsRef.current.add(node.id);
             let controller: AbortController | undefined;
             try {
-                const generationConfig = buildGenerationConfig(effectiveConfig, node, "video");
+                let generationConfig = buildGenerationConfig(effectiveConfig, node, "video");
+                if (!isAiConfigReady(generationConfig, generationConfig.model)) {
+                    // 旧节点记录的模型可能属于已不存在的渠道（如旧版 default 渠道）。查询任务只需要
+                    // 同一站点的令牌，按模型名或任一可用视频模型换到当前渠道，以便取回旧视频的播放地址。
+                    const name = modelOptionName(generationConfig.model);
+                    const ready = generationConfig.channels.filter((channel) => channel.baseUrl.trim() && channel.apiKey.trim());
+                    const channel = ready.find((item) => item.models.some((model) => model.name === name)) || ready.find((item) => item.models.some((model) => model.capability === "video"));
+                    const model = channel?.models.find((item) => item.name === name) || channel?.models.find((item) => item.capability === "video");
+                    if (channel && model) generationConfig = { ...generationConfig, model: encodeChannelModel(channel.id, model.name) };
+                }
                 if (!isAiConfigReady(generationConfig, generationConfig.model)) {
                     if (silent) {
                         setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: t("workbench.configFirst") } } : item)));

@@ -136,14 +136,10 @@ function videoPluginResult(result: unknown): VideoGenerationResult {
 }
 
 export async function storeGeneratedVideo(result: VideoGenerationResult): Promise<UploadedFile> {
+    // 有播放地址时直接交给 <video> 边下边播，不下载整个文件、也不写入 IndexedDB；
+    // 只返回二进制内容的接口（如部分官方接口）才需要保存到本地。
+    if (result.url) return { url: result.url, storageKey: "", bytes: 0, mimeType: result.mimeType || "video/mp4" };
     if (result.blob) return uploadMediaFile(result.blob, "video");
-    if (result.url) {
-        try {
-            return await uploadMediaFile(result.url, "video");
-        } catch {
-            return { url: result.url, storageKey: "", bytes: 0, mimeType: result.mimeType || "video/mp4" };
-        }
-    }
     throw new Error(apiText("noPlayableVideo"));
 }
 
@@ -209,15 +205,9 @@ async function pollOpenAIVideoTask(config: AiConfig, task: VideoGenerationTask, 
     }
 }
 
-async function videoResultFromUrl(url: string, options?: RequestOptions): Promise<VideoGenerationResult> {
-    try {
-        const response = await axios.get<Blob>(withLocalProxy(url), { responseType: "blob", signal: options?.signal });
-        await assertVideoBlob(response.data);
-        return { blob: response.data };
-    } catch (error) {
-        if (axios.isCancel(error) || options?.signal?.aborted) throw error;
-        return { url, mimeType: "video/mp4" };
-    }
+// 只记录播放地址（随画布数据保存），由 <video> 直接边下边播，不预先下载整个文件。
+async function videoResultFromUrl(url: string, _options?: RequestOptions): Promise<VideoGenerationResult> {
+    return { url, mimeType: "video/mp4" };
 }
 
 async function createGeminiVideoTask(config: AiConfig, model: string, prompt: string, references: ReferenceImage[], options?: VideoMediaOptions): Promise<VideoGenerationTask> {

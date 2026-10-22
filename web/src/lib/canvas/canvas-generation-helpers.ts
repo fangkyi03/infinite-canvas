@@ -47,7 +47,14 @@ export async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
         nodes.map(async (node) => {
             const metadata = node.metadata;
             const content = metadata?.content;
-            if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && metadata?.storageKey) return { ...node, metadata: { ...metadata, content: await resolveMediaUrl(metadata.storageKey, content) } };
+            if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && metadata?.storageKey) {
+                const local = await resolveMediaUrl(metadata.storageKey, "");
+                if (local) return { ...node, metadata: { ...metadata, content: local } };
+                // 旧版本把视频文件存在本地；本地已没有文件（清缓存/换浏览器）时，原来的 blob: 地址已失效。
+                // 有任务号的视频清空地址，打开画布后按任务号重新获取播放地址（见 hasResumableVideoTask）。
+                if (node.type === CanvasNodeType.Video && metadata.videoTaskId && content?.startsWith("blob:")) return { ...node, metadata: { ...metadata, content: "", storageKey: undefined } };
+                return node;
+            }
             if (node.type !== CanvasNodeType.Image || !metadata || !content) return node;
             const images = await Promise.all(
                 (metadata.images || []).map(async (image) => {
