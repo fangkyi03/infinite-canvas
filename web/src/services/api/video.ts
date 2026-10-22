@@ -47,15 +47,20 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
     return waitForVideoGenerationTask(config, await createVideoGenerationTask(config, prompt, references, options), options);
 }
 
+// 视频任务等待上限：上游生成可能长达半小时以上（如 XB 约 13 分钟、XG 实测 36 分钟），
+// 最多等待 2 小时，每 5 秒查询一次。超时后节点保留任务号，重试会继续查询原任务，不会重复扣费。
+export const VIDEO_POLL_INTERVAL_MS = 5000;
+export const VIDEO_POLL_MAX_ATTEMPTS = (2 * 60 * 60 * 1000) / VIDEO_POLL_INTERVAL_MS;
+
 export async function waitForVideoGenerationTask(config: AiConfig, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationResult> {
-    for (let attempt = 0; attempt < 120; attempt += 1) {
+    for (let attempt = 0; attempt < VIDEO_POLL_MAX_ATTEMPTS; attempt += 1) {
         if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
         const state = await pollVideoGenerationTask(config, task, options);
         if (state.status === "pending" && typeof state.progress === "number") options?.onProgress?.(state.progress);
         if (state.status === "completed") return state.result;
         if (state.status === "failed") throw videoTaskFailed(state.error);
-        if (attempt === 119) throw new Error(apiText("videoTimeout", { provider: "" }));
-        await delay(2500, options?.signal);
+        if (attempt === VIDEO_POLL_MAX_ATTEMPTS - 1) throw new Error(apiText("videoTimeout", { provider: "" }));
+        await delay(VIDEO_POLL_INTERVAL_MS, options?.signal);
     }
     throw new Error(apiText("videoTimeout", { provider: "" }));
 }
