@@ -18,6 +18,7 @@ import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webd
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { computeMediaSize, inferMediaRatio, inferMediaScale, mediaScaleOptions, parseVideoResolution } from "@/lib/media-size";
 import { createModelChannel, guessCapability, modelOptionsFromChannels, normalizeModelOptionValue, selectableModelsByCapability, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { isSiteDeployment } from "@/services/api/site-session";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -77,6 +78,9 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     // 进入配置页时按当前 API Key 重新读取 /v1/models。服务端会按 Key
     // 返回其所属分组的模型，因此用户无需手动选择分组或维护模型清单。
     useEffect(() => {
+        // 同域名部署时渠道已按 new-api 分组自动生成（见 site-session），这里不能再
+        // 用第一个渠道的结果覆盖整个渠道列表。
+        if (isSiteDeployment()) return;
         const channel = config.channels[0];
         const apiKey = channel?.apiKey.trim() || "";
         if (!apiKey || channel?.apiFormat !== "openai" || autoSyncedKeyRef.current === apiKey) return;
@@ -221,12 +225,17 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
                                                     {apiFormatLabel(channel.apiFormat)} · {t("config.channels.modelCount", { count: channel.models.length })} · {channel.baseUrl || t("config.channels.missingUrl")}
                                                 </div>
                                             </div>
-                                            <div className="flex shrink-0 gap-2">
-                                                <Button size="small" icon={<Pencil className="size-3.5" />} onClick={() => setEditingChannelId(channel.id)}>
-                                                    {t("common.edit")}
-                                                </Button>
-                                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />
-                                            </div>
+                                            {channel.id.startsWith("site-") ? (
+                                                // 主站分组渠道每次进入都会重新同步，编辑或删除都会被覆盖。
+                                                <span className="shrink-0 text-xs text-stone-500">主站同步</span>
+                                            ) : (
+                                                <div className="flex shrink-0 gap-2">
+                                                    <Button size="small" icon={<Pencil className="size-3.5" />} onClick={() => setEditingChannelId(channel.id)}>
+                                                        {t("common.edit")}
+                                                    </Button>
+                                                    <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={() => deleteChannel(channel.id)} />
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { useConfigStore } from "@/stores/use-config-store";
 import { usePromptSourceScheduler } from "@/hooks/use-prompt-source-scheduler";
+import { isSiteDeployment, loadSiteChannels, redirectToSiteLogin, SiteLoginRequiredError } from "@/services/api/site-session";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
@@ -12,11 +13,23 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const handledConfigParams = useRef(false);
     const importChannelCredentials = useConfigStore((state) => state.importChannelCredentials);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
+    const applySiteChannels = useConfigStore((state) => state.applySiteChannels);
 
     usePromptSourceScheduler();
 
+    // 同域名部署：用 new-api 登录状态自动加载分组和模型，未登录则跳转登录页。
     useEffect(() => {
-        if (handledConfigParams.current) return;
+        if (!isSiteDeployment()) return;
+        loadSiteChannels()
+            .then(applySiteChannels)
+            .catch((error) => {
+                if (error instanceof SiteLoginRequiredError) redirectToSiteLogin();
+                else message.error(error instanceof Error ? error.message : String(error));
+            });
+    }, [applySiteChannels, message]);
+
+    useEffect(() => {
+        if (handledConfigParams.current || isSiteDeployment()) return;
         const searchParams = new URLSearchParams(window.location.search);
         const baseUrl = searchParams.get("baseUrl") || searchParams.get("baseurl");
         const apiKey = searchParams.get("apiKey") || searchParams.get("apikey");

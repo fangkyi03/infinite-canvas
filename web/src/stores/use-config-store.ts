@@ -144,6 +144,8 @@ type ConfigStore = {
     openConfigDialog: (shouldPromptContinue?: boolean, tab?: ConfigTabKey) => void;
     setConfigDialogOpen: (isOpen: boolean) => void;
     clearPromptContinue: () => void;
+    /** 同域名部署时同步 new-api 分组渠道：替换上一次同步的分组渠道，保留用户自建渠道。 */
+    applySiteChannels: (siteChannels: ModelChannel[]) => void;
 };
 
 // 当前项目对外模型使用 sd25/sd20/special-sd25 等别名，不能只依赖上游
@@ -242,6 +244,31 @@ export const useConfigStore = create<ConfigStore>()(
             openConfigDialog: (shouldPromptContinue = false, configTab = "channels") => set({ isConfigOpen: true, shouldPromptContinue, configTab }),
             setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
             clearPromptContinue: () => set({ shouldPromptContinue: false }),
+            applySiteChannels: (siteChannels) =>
+                set((state) => {
+                    // 主站分组渠道排在前面，每次进入都按主站最新分组刷新；用户自建渠道原样保留，
+                    // 只去掉从未配置过的空渠道（无 Key 且无模型，如旧版本自动生成的默认渠道）。
+                    const ownChannels = state.config.channels.filter((channel) => !channel.id.startsWith("site-") && (channel.apiKey.trim() || channel.models.length));
+                    const channels = [...siteChannels, ...ownChannels];
+                    const pick = (value: string, capability: ModelCapability) => {
+                        const kept = normalizeModelOptionValue(value, channels);
+                        if (kept) return kept;
+                        const channel = channels.find((item) => item.models.some((model) => model.capability === capability));
+                        const model = channel?.models.find((item) => item.capability === capability);
+                        return channel && model ? encodeChannelModel(channel.id, model.name) : "";
+                    };
+                    return {
+                        config: {
+                            ...state.config,
+                            channels,
+                            models: modelOptionsFromChannels(channels),
+                            imageModel: pick(state.config.imageModel, "image"),
+                            videoModel: pick(state.config.videoModel, "video"),
+                            textModel: pick(state.config.textModel, "text"),
+                            audioModel: pick(state.config.audioModel, "audio"),
+                        },
+                    };
+                }),
         }),
         {
             name: CONFIG_STORE_KEY,
@@ -314,7 +341,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
     return {
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || i18n.t("config.channels.newName"),
-        baseUrl: apiFormat === "openai" ? OPENAI_BASE_URL : channel?.baseUrl?.trim() || defaultBaseUrlForApiFormat(apiFormat),
+        baseUrl: apiFormat === "openai" && !channel?.id?.startsWith("site-") ? OPENAI_BASE_URL : channel?.baseUrl?.trim() || defaultBaseUrlForApiFormat(apiFormat),
         apiKey: channel?.apiKey || "",
         apiFormat,
         models: normalizeChannelModels(channel?.models),
@@ -445,7 +472,7 @@ function normalizeChannels(config: AiConfig) {
     const channels = persistedChannels.map((channel, index) =>
         createModelChannel({
             ...channel,
-            baseUrl: channel.apiFormat === "openai" ? OPENAI_BASE_URL : channel.baseUrl,
+            baseUrl: channel.apiFormat === "openai" && !channel.id?.startsWith("site-") ? OPENAI_BASE_URL : channel.baseUrl,
             id: channel.id || (index === 0 ? "default" : `channel-${index + 1}`),
             name: channel.name || (index === 0 ? i18n.t("config.channels.defaultName") : i18n.t("config.channels.indexedName", { index: index + 1 })),
             models: normalizeChannelModels(channel.models),
