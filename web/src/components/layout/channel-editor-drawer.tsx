@@ -1,9 +1,10 @@
-import { Button, Drawer, Input, Segmented, Select, Space } from "antd";
+import { App, Button, Drawer, Input, Segmented, Select, Space } from "antd";
 import { ListPlus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { defaultBaseUrlForApiFormat, guessCapability, normalizeChannelModels, type ApiCallFormat, type ChannelModel, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { fetchChannelModels } from "@/services/api/image";
 import { ModelScriptEditor } from "./model-script-editor";
 import { ModelSelectModal } from "./model-select-modal";
 
@@ -11,22 +12,30 @@ type ScriptTarget = { name: string; capability: ModelCapability; value: string }
 
 export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: boolean; channel: ModelChannel | null; onSave: (channel: ModelChannel) => void; onClose: () => void }) {
     const { t } = useTranslation();
+    const { message } = App.useApp();
+    const requestId = useRef(0);
+    const [saving, setSaving] = useState(false);
     const [draft, setDraft] = useState<ModelChannel | null>(channel);
     const [selectOpen, setSelectOpen] = useState(false);
     const [scriptTarget, setScriptTarget] = useState<ScriptTarget | null>(null);
-    const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [
-        { label: "OpenAI", value: "openai" },
-        { label: "Gemini", value: "gemini" },
-    ];
+    const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [{ label: "OpenAI", value: "openai" }];
     const capabilityOptions: Array<{ label: string; value: ModelCapability }> = ["image", "video", "text", "audio"].map((value) => ({ label: t(`config.channelEditor.capabilities.${value}`), value: value as ModelCapability }));
 
     useEffect(() => {
+        requestId.current += 1;
+        setSaving(false);
         if (open && channel) setDraft(channel);
+        return () => { requestId.current += 1; };
     }, [open, channel]);
 
     if (!draft) return null;
 
-    const patch = (value: Partial<ModelChannel>) => setDraft((current) => (current ? { ...current, ...value } : current));
+    const patch = (value: Partial<ModelChannel>) => {
+        // 编辑期间使旧请求失效，防止旧 Key 的结果覆盖新输入。
+        requestId.current += 1;
+        setSaving(false);
+        setDraft((current) => (current ? { ...current, ...value } : current));
+    };
     const setModels = (models: ChannelModel[]) => patch({ models });
 
     const changeApiFormat = (apiFormat: ApiCallFormat) => {
@@ -43,9 +52,30 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
     const setScript = (name: string, script: string) => setModels(draft.models.map((model) => (model.name === name ? { ...model, script: script || undefined } : model)));
     const removeModel = (name: string) => setModels(draft.models.filter((model) => model.name !== name));
 
-    const save = () => {
-        onSave({ ...draft, name: draft.name.trim() || t("config.channels.unnamed"), models: normalizeChannelModels(draft.models) });
-        onClose();
+    const save = async () => {
+        if (saving) return;
+        const next = { ...draft, baseUrl: "https://xaxn.fun/", apiKey: draft.apiKey.trim(), name: draft.name.trim() || t("config.channels.unnamed") };
+        if (!next.apiKey) {
+            message.error(t("config.modelSelect.missingConfig"));
+            return;
+        }
+        const id = ++requestId.current;
+        setSaving(true);
+        try {
+            // 保存凭据时直接获取全部授权模型，保留同名模型的分类和自定义脚本。
+            const names = await fetchChannelModels(next);
+            if (id !== requestId.current) return;
+            const existing = new Map(next.models.map((model) => [model.name, model]));
+            const models = normalizeChannelModels(names.map((name) => existing.get(name) || { name, capability: guessCapability(name) }));
+            onSave({ ...next, models });
+            message.success(t("config.modelSelect.fetched", { count: models.length }));
+            onClose();
+        } catch {
+            // 不展示可能包含凭据的上游原始错误，也不保存失败请求的模型列表。
+            if (id === requestId.current) message.error(t("config.modelSelect.fetchFailed"));
+        } finally {
+            if (id === requestId.current) setSaving(false);
+        }
     };
 
     return (
@@ -58,7 +88,7 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
             extra={
                 <Space>
                     <Button onClick={onClose}>{t("common.cancel")}</Button>
-                    <Button type="primary" onClick={save}>
+                    <Button type="primary" loading={saving} onClick={() => void save()}>
                         {t("common.save")}
                     </Button>
                 </Space>
@@ -75,11 +105,12 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
                 </label>
                 <label className="block md:col-span-2">
                     <span className="mb-1 block text-sm font-medium">{t("config.channelEditor.baseUrl")}</span>
-                    <Input value={draft.baseUrl} onChange={(event) => patch({ baseUrl: event.target.value })} placeholder="https://api.example.com" />
+                    <Input value="https://xaxn.fun/" disabled />
                 </label>
                 <label className="block md:col-span-2">
                     <span className="mb-1 block text-sm font-medium">API Key</span>
-                    <Input.Password value={draft.apiKey} onChange={(event) => patch({ apiKey: event.target.value })} placeholder="sk-..." />
+                    <Input.Password value={draft.apiKey} onChange={(event) => patch({ apiKey: event.target.value })} onPressEnter={() => void save()} placeholder="sk-..." />
+                    <span className="mt-1 block text-xs text-stone-500">填入 API Key 后保存，自动获取该 Key 可用的模型。</span>
                 </label>
             </div>
 

@@ -39,6 +39,7 @@ type GenerationResult = {
     status: "pending" | "success" | "failed";
     video?: GeneratedVideo;
     error?: string;
+    progress?: number;
 };
 
 type GenerationLog = {
@@ -336,6 +337,7 @@ export default function VideoPage() {
                     return;
                 }
                 if (state.status === "failed") throw new Error(state.error);
+                setResults([{ id: log.id, status: "pending", progress: state.progress }]);
                 if (attempt === 119) throw new Error(t("videoWorkbench.timeout"));
                 await delay(2500);
             }
@@ -470,7 +472,7 @@ export default function VideoPage() {
                         </div>
                         {results.length ? (
                             <div className="grid gap-4">
-                                {results.map((result) => (result.status === "success" && result.video ? <ResultVideoCard key={result.id} video={result.video} onDownload={downloadVideo} onSaveAsset={saveResultToAssets} /> : result.status === "failed" ? <FailedVideoCard key={result.id} error={result.error || t("workbench.generationFailed")} onRetry={retryResult} /> : <PendingVideoCard key={result.id} />))}
+                                {results.map((result) => (result.status === "success" && result.video ? <ResultVideoCard key={result.id} video={result.video} onDownload={downloadVideo} onSaveAsset={saveResultToAssets} /> : result.status === "failed" ? <FailedVideoCard key={result.id} error={result.error || t("workbench.generationFailed")} onRetry={retryResult} /> : <PendingVideoCard key={result.id} progress={result.progress} />))}
                             </div>
                         ) : (
                             <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-center dark:border-stone-700 lg:min-h-[560px]">
@@ -552,13 +554,13 @@ function ResultVideoCard({ video, onDownload, onSaveAsset }: { video: GeneratedV
     );
 }
 
-function PendingVideoCard() {
+function PendingVideoCard({ progress }: { progress?: number }) {
     const { t } = useTranslation();
     return (
         <div className="relative aspect-video overflow-hidden rounded-lg border border-dashed border-stone-300 bg-stone-50 dark:border-stone-700 dark:bg-stone-900">
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-stone-500 dark:text-stone-400">
                 <LoaderCircle className="size-6 animate-spin" />
-                <span>{t("workbench.generating")}</span>
+                <span>{t("workbench.generating")}{typeof progress === "number" ? ` ${progress}%` : ""}</span>
             </div>
         </div>
     );

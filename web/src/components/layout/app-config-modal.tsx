@@ -12,11 +12,12 @@ import { ConfigPromptSources } from "@/components/layout/config-prompt-sources";
 import { ConfigLocalStorage } from "@/components/layout/config-local-storage";
 import type { AppLocale } from "@/i18n";
 import { exportAppConfig, importAppConfig } from "@/services/config-file";
+import { fetchChannelModels } from "@/services/api/image";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
 import { testWebdavConnection, WEBDAV_MANIFEST_FILE_NAME } from "@/services/webdav-sync";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
 import { computeMediaSize, inferMediaRatio, inferMediaScale, mediaScaleOptions, parseVideoResolution } from "@/lib/media-size";
-import { createModelChannel, modelOptionsFromChannels, normalizeModelOptionValue, selectableModelsByCapability, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { createModelChannel, guessCapability, modelOptionsFromChannels, normalizeModelOptionValue, selectableModelsByCapability, useConfigStore, type AiConfig, type ApiCallFormat, type ConfigTabKey, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -59,6 +60,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     const [syncingWebdav, setSyncingWebdav] = useState(false);
     const [webdavSyncStatus, setWebdavSyncStatus] = useState("");
     const [webdavDomainProgress, setWebdavDomainProgress] = useState(createWebdavDomainProgress);
+    const autoSyncedKeyRef = useRef("");
     const config = useConfigStore((state) => state.config);
     const webdav = useConfigStore((state) => state.webdav);
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -71,6 +73,22 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "channels"
     const locale = i18n.resolvedLanguage as AppLocale;
     const imageResolutionOptions = mediaScaleOptions.map((value) => ({ value, label: value === "auto" ? t("settingsPanels.common.auto") : value.toUpperCase() }));
     useEffect(() => setActiveTab(initialTab), [initialTab]);
+
+    // 进入配置页时按当前 API Key 重新读取 /v1/models。服务端会按 Key
+    // 返回其所属分组的模型，因此用户无需手动选择分组或维护模型清单。
+    useEffect(() => {
+        const channel = config.channels[0];
+        const apiKey = channel?.apiKey.trim() || "";
+        if (!apiKey || channel?.apiFormat !== "openai" || autoSyncedKeyRef.current === apiKey) return;
+        autoSyncedKeyRef.current = apiKey;
+        void fetchChannelModels({ ...channel, baseUrl: "https://xaxn.fun/" }).then((names) => {
+            const existing = new Map(channel.models.map((model) => [model.name, model]));
+            const models = names.map((name) => existing.get(name) || { name, capability: guessCapability(name) });
+            updateChannels([{ ...channel, baseUrl: "https://xaxn.fun/", models }]);
+        }).catch(() => {
+            // 自动同步失败时保留本地模型，不阻塞配置页打开。
+        });
+    }, [config.channels]);
 
     const saveConfig = (nextConfig: AiConfig) => {
         (Object.keys(nextConfig) as Array<keyof AiConfig>).forEach((key) => updateConfig(key, nextConfig[key]));

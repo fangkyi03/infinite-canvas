@@ -5,6 +5,10 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
+- 默认渠道：新用户仅填写 xaxn.fun 的 API Key 并保存，模型列表应来自 `/v1/models`，按能力自动选择默认模型；更换 Key 后移除不再可用的模型，空列表不回退预置型号，请求失败不覆盖已有配置，编辑或关闭抽屉后旧请求不得写回。
+
+- 子路径部署：使用 `VITE_BASE=/canvas/` 构建后，验证页面跳转、深层链接刷新、模型图标、本地插件和 Agent 连接链接均留在部署前缀下。
+
 The current release needs manual verification in these areas:
 
 - Saved model selection: save a canvas node with a model, then remove its provider or remove that model while another video model remains the default. Generation, retry and pending-video recovery should keep the unavailable model selected and open configuration instead of sending a request to the default or first provider. Re-selecting a valid model should allow generation. Changing only the API key on the same provider should preserve the model; switching a config node from a valid image model to video should still use the video default.

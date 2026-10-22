@@ -32,4 +32,7 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "*", element: <NotFound /> },
-]);
+], {
+    // 路由与构建资源共用部署前缀，支持 /canvas/ 子路径。
+    basename: import.meta.env.BASE_URL,
+});

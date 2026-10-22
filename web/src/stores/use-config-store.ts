@@ -74,7 +74,7 @@ export type ChannelCredentialsImportResult = {
 
 export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 const CHANNEL_MODEL_SEPARATOR = "::";
-const OPENAI_BASE_URL = "https://api.openai.com";
+const OPENAI_BASE_URL = "https://xaxn.fun/";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
 export const LOCAL_PROXY_PACKAGE = "@basketikun/canvas-proxy";
 export const DEFAULT_LOCAL_PROXY_URL = "http://127.0.0.1:23210";
@@ -91,19 +91,15 @@ export const defaultConfig: AiConfig = {
             baseUrl: OPENAI_BASE_URL,
             apiKey: "",
             apiFormat: "openai",
-            models: [
-                { name: "gpt-image-2", capability: "image" },
-                { name: "grok-imagine-video", capability: "video" },
-                { name: "gpt-5.5", capability: "text" },
-                { name: "gpt-4o-mini-tts", capability: "audio" },
-            ],
+            // 模型以用户 API Key 的实际查询结果为准，不预置未授权型号。
+            models: [],
         },
     ],
-    model: "default::gpt-image-2",
-    imageModel: "default::gpt-image-2",
-    videoModel: "default::grok-imagine-video",
-    textModel: "default::gpt-5.5",
-    audioModel: "default::gpt-4o-mini-tts",
+    model: "",
+    imageModel: "",
+    videoModel: "",
+    textModel: "",
+    audioModel: "",
     audioVoice: "alloy",
     audioFormat: "mp3",
     audioSpeed: "1",
@@ -115,7 +111,7 @@ export const defaultConfig: AiConfig = {
     videoMode: "frames",
     systemPrompt: "",
     reasoningEffort: "auto",
-    models: ["default::gpt-image-2", "default::grok-imagine-video", "default::gpt-5.5", "default::gpt-4o-mini-tts"],
+    models: [],
     quality: "auto",
     size: "1:1",
     background: "",
@@ -150,7 +146,9 @@ type ConfigStore = {
     clearPromptContinue: () => void;
 };
 
-const VIDEO_KEYWORDS = ["video", "sora", "veo", "kling", "wan", "hailuo"];
+// 当前项目对外模型使用 sd25/sd20/special-sd25 等别名，不能只依赖上游
+// 名称中的 video/wan，否则自动拉取模型后会被误判为文本模型。
+const VIDEO_KEYWORDS = ["video", "sora", "veo", "kling", "wan", "wan3", "hailuo", "seedance", "sd2", "sd25", "special-sd25"];
 
 export function boolConfig(value: string, fallback: boolean) {
     return value ? value === "true" : fallback;
@@ -316,7 +314,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
     return {
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || i18n.t("config.channels.newName"),
-        baseUrl: channel?.baseUrl?.trim() || defaultBaseUrlForApiFormat(apiFormat),
+        baseUrl: apiFormat === "openai" ? OPENAI_BASE_URL : channel?.baseUrl?.trim() || defaultBaseUrlForApiFormat(apiFormat),
         apiKey: channel?.apiKey || "",
         apiFormat,
         models: normalizeChannelModels(channel?.models),
@@ -327,20 +325,16 @@ export function upsertChannelCredentials(
     config: AiConfig,
     input: { baseUrl?: string | null; apiKey?: string | null },
 ): ChannelCredentialsImportResult & { config: AiConfig } {
-    const rawBaseUrl = input.baseUrl?.trim() || "";
-    if (!rawBaseUrl) return { status: "missing-base-url", config };
-    if (!isHttpBaseUrl(rawBaseUrl)) return { status: "invalid-base-url", config };
-
-    const baseUrl = normalizeImportedBaseUrl(rawBaseUrl);
+    const baseUrl = OPENAI_BASE_URL;
     const apiKey = input.apiKey?.trim() || "";
-    const matchingIndex = config.channels.findIndex((channel) => normalizedBaseUrlKey(channel.baseUrl) === normalizedBaseUrlKey(baseUrl));
+    const matchingIndex = config.channels.findIndex((channel) => channel.apiFormat === "openai");
 
     if (matchingIndex >= 0) {
         const existing = config.channels[matchingIndex];
         if (existing.baseUrl === baseUrl && (!apiKey || existing.apiKey === apiKey)) {
             return { status: "updated", channelName: existing.name, config };
         }
-        const updated = { ...existing, baseUrl, ...(apiKey ? { apiKey } : {}) };
+        const updated = { ...existing, baseUrl: OPENAI_BASE_URL, ...(apiKey ? { apiKey } : {}) };
         const channels = config.channels.map((channel, index) => (index === matchingIndex ? updated : channel));
         return { status: "updated", channelName: existing.name, config: { ...config, channels } };
     }
@@ -451,6 +445,7 @@ function normalizeChannels(config: AiConfig) {
     const channels = persistedChannels.map((channel, index) =>
         createModelChannel({
             ...channel,
+            baseUrl: channel.apiFormat === "openai" ? OPENAI_BASE_URL : channel.baseUrl,
             id: channel.id || (index === 0 ? "default" : `channel-${index + 1}`),
             name: channel.name || (index === 0 ? i18n.t("config.channels.defaultName") : i18n.t("config.channels.indexedName", { index: index + 1 })),
             models: normalizeChannelModels(channel.models),
