@@ -1,0 +1,18 @@
+{
+	// 画布参考素材上传 Worker：通过 R2 绑定写入 canvas-uploads 桶，接口挂在素材域名 upload.xaxn.fun/api/ 下。
+	// 画布在 xaxn.fun（xaxn-fun-proxy 的 Custom Domain，无法再挂路由），因此跨域调用，来源由 ALLOWED_ORIGINS 控制。
+	"name": "canvas-r2-upload",
+	"main": "src/index.js",
+	"compatibility_date": "2026-09-01",
+	"account_id": "53d8e842a10e636d6fdc1d98a8993b91",
+	"workers_dev": false,
+	"routes": [{ "pattern": "upload.xaxn.fun/api/*", "zone_name": "xaxn.fun" }],
+	"r2_buckets": [{ "binding": "BUCKET", "bucket_name": "canvas-uploads" }],
+	"vars": {
+		"R2_PREFIX": "",
+		"PUBLIC_BASE_URL": "https://upload.xaxn.fun",
+		"NEW_API_ORIGIN": "https://xaxn.fun",
+		"ALLOWED_ORIGINS": "https://xaxn.fun,https://www.xaxn.fun",
+		"MAX_OBJECT_SIZE_MB": "1024"
+	}
+}

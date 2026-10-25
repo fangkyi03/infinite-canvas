@@ -9,6 +9,7 @@ interface ImportMetaEnv {
     // Optional build-time analytics configuration, with one independent variable per provider.
     // GA4 measurement ID (G-XXXX)
     readonly VITE_ANALYTICS_GA4_ID?: string;
+    readonly VITE_R2_UPLOAD_URL?: string;
     // Baidu Analytics site ID
     readonly VITE_ANALYTICS_BAIDU_ID?: string;
 }

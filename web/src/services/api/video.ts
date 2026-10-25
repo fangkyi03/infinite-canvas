@@ -8,6 +8,7 @@ import { getMediaBlob, resolveMediaUrl, uploadMediaFile, type UploadedFile } fro
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
+import { canUploadReferencesToR2, getMirroredR2Url, uploadReferenceToR2 } from "./r2-upload";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -166,7 +167,21 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
     body.append("generate_audio", String(boolConfig(config.videoGenerateAudio, true)));
     body.append("watermark", String(boolConfig(config.videoWatermark, false)));
     body.append("mode", mode);
-    if (mode === "frames") {
+    const referenceUrls = await uploadVideoReferencesToR2(
+        config,
+        {
+            images: references.map((image, index) => ({ storageKey: image.storageKey, file: images[index] })),
+            videos: (options?.videos || []).map((video, index) => ({ storageKey: video.storageKey, file: videos[index] })),
+            audios: (options?.audios || []).map((audio, index) => ({ storageKey: audio.storageKey, file: audios[index] })),
+        },
+        options,
+    );
+    if (referenceUrls) {
+        // 素材已在 R2：images/videos/audios 只放公开地址，顺序即首帧、尾帧和 @图N 编号。
+        referenceUrls.images.forEach((url) => body.append("images", url));
+        referenceUrls.videos.forEach((url) => body.append("videos", url));
+        referenceUrls.audios.forEach((url) => body.append("audios", url));
+    } else if (mode === "frames") {
         if (images[0]) {
             body.append("first_frame", images[0], "first.png");
             body.append("images", images[0], "first.png");
@@ -181,14 +196,33 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
             body.append("images", file, `ref_${idx + 1}.png`);
         });
     }
-    videos.forEach((file) => body.append("video[]", file));
-    audios.forEach((file) => body.append("audio[]", file));
+    if (!referenceUrls) {
+        videos.forEach((file) => body.append("video[]", file));
+        audios.forEach((file) => body.append("audio[]", file));
+    }
     try {
         const created = unwrapVideoResponse((await axios.post<ApiVideoResponse>(aiApiUrl(config, "/videos"), body, { headers: aiHeaders(config), signal: options?.signal })).data);
         if (!created.id) throw new Error(apiText("noVideoTaskId"));
         return { id: created.id, provider: "openai", model };
     } catch (error) {
         throw new Error(readAxiosError(error, apiText("videoTaskCreateFailed")));
+    }
+}
+
+type R2Reference = { storageKey?: string; file: File };
+
+// 站点模式下参考素材只提交 R2 地址：添加到画布时已同步的直接使用，其余在提交前上传；
+// R2 接口不可用或上传失败时返回 null，退回 multipart 文件上传（超过 100MB 会被 Cloudflare 拒绝）。
+async function uploadVideoReferencesToR2(config: AiConfig, refs: { images: R2Reference[]; videos: R2Reference[]; audios: R2Reference[] }, options?: RequestOptions) {
+    if (!canUploadReferencesToR2(config.baseUrl) || refs.images.length + refs.videos.length + refs.audios.length === 0) return null;
+    const upload = (items: R2Reference[]) => Promise.all(items.map(async (item) => (await getMirroredR2Url(item.storageKey)) || uploadReferenceToR2(item.file, config.apiKey, options?.signal)));
+    try {
+        const [imageUrls, videoUrls, audioUrls] = await Promise.all([upload(refs.images), upload(refs.videos), upload(refs.audios)]);
+        return { images: imageUrls, videos: videoUrls, audios: audioUrls };
+    } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") throw error;
+        console.warn("R2 reference upload failed, falling back to multipart upload", error);
+        return null;
     }
 }
 

@@ -2,6 +2,7 @@ import localforage from "localforage";
 
 import { nanoid } from "nanoid";
 import i18n from "@/i18n";
+import { mirrorUploadToR2 } from "@/services/api/r2-upload";
 import { withLocalProxy } from "@/stores/use-config-store";
 import { createImageThumbnail } from "@/lib/image-thumbnail";
 
@@ -59,6 +60,7 @@ async function storeImage(blob: Blob, options?: ImageReadOptions): Promise<Uploa
         await store.setItem(storageKey, blob);
         throwIfAborted(options?.signal);
         objectUrls.set(storageKey, url);
+        mirrorUploadToR2(storageKey, blob);
         await storeImagePreview(storageKey, blob);
         return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type.startsWith("image/") ? blob.type : "" };
     } catch (error) {

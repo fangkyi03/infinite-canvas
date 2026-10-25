@@ -8,6 +8,7 @@
 type RuntimeConfig = {
     ANALYTICS_GA4_ID?: string; // GA4 measurement ID (G-XXXX)
     ANALYTICS_BAIDU_ID?: string; // Baidu Analytics site ID
+    R2_UPLOAD_URL?: string; // r2-upload Worker 接口地址（如 https://upload.xaxn.fun/api），为空时不上传 R2
 };
 
 declare global {
@@ -27,3 +28,4 @@ function read(key: keyof RuntimeConfig, buildTime: string | undefined, fallback 
 
 export const ANALYTICS_GA4_ID = read("ANALYTICS_GA4_ID", import.meta.env.VITE_ANALYTICS_GA4_ID);
 export const ANALYTICS_BAIDU_ID = read("ANALYTICS_BAIDU_ID", import.meta.env.VITE_ANALYTICS_BAIDU_ID);
+export const R2_UPLOAD_URL = read("R2_UPLOAD_URL", import.meta.env.VITE_R2_UPLOAD_URL).replace(/\/+$/, "");

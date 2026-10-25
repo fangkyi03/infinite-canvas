@@ -1,0 +1,8 @@
+{
+    "name": "canvas-r2-upload",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "deploy": "wrangler deploy"
+    }
+}
