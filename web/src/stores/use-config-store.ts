@@ -13,7 +13,11 @@ export type ChannelModel = {
     name: string;
     capability: ModelCapability;
     script?: string;
+    /** 站点模式下从 new-api 定价同步的单价（已乘分组倍率）。 */
+    pricing?: ModelPricing;
 };
+
+export type ModelPricing = { amount: number; unit: "call" | "second" };
 
 export type ModelChannel = {
     id: string;

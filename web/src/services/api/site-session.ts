@@ -1,4 +1,4 @@
-import { guessCapability, type ModelChannel } from "@/stores/use-config-store";
+import { guessCapability, type ModelChannel, type ModelPricing } from "@/stores/use-config-store";
 
 // 画布部署在 new-api 同域名的子路径（/canvas/）下时，直接用 new-api 的登录状态：
 // 用 Refresh Cookie 换取当前用户专属的 Canvas 令牌，并按 new-api 分组生成渠道，
@@ -9,8 +9,26 @@ export function isSiteDeployment() {
     return import.meta.env.BASE_URL !== "/";
 }
 
-type PricingModel = { model_name?: string; enable_groups?: string[]; billing_usage_schema?: Record<string, unknown> };
-type PricingResponse = { data?: PricingModel[]; usable_group?: Record<string, string> };
+type PricingModel = {
+    model_name?: string;
+    enable_groups?: string[];
+    billing_usage_schema?: Record<string, unknown>;
+    quota_type?: number;
+    model_price?: number;
+    billing_expr?: string;
+};
+type PricingResponse = { data?: PricingModel[]; usable_group?: Record<string, string>; group_ratio?: Record<string, number> };
+
+// 按秒计费的表达式形如 tier("base", u("seconds") * 0.25)，系数即每秒单价。
+const PER_SECOND_EXPR = /u\("seconds"\)\s*\*\s*([\d.]+)/;
+
+/** 同步上游价格：按次计费取每条单价，按秒表达式取每秒单价，再乘以分组倍率。 */
+function modelPricing(item: PricingModel, groupRatio: number): ModelPricing | undefined {
+    if (item.quota_type === 1 && item.model_price) return { amount: item.model_price * groupRatio, unit: "call" };
+    const perSecond = Number(item.billing_expr?.match(PER_SECOND_EXPR)?.[1]);
+    if (perSecond) return { amount: perSecond * groupRatio, unit: "second" };
+    return undefined;
+}
 
 export class SiteLoginRequiredError extends Error {}
 
@@ -33,9 +51,11 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
     const groups = new Map<string, string[]>();
     // 按秒计费（billing_usage_schema 含 seconds）的是视频模型；名字不含视频关键词时也能识别。
     const videoModels = new Set<string>();
+    const pricingByName = new Map<string, PricingModel>();
     for (const item of pricing.data || []) {
         const name = item.model_name || "";
         if (!available.has(name)) continue;
+        pricingByName.set(name, item);
         if (item.billing_usage_schema && "seconds" in item.billing_usage_schema) videoModels.add(name);
         for (const group of item.enable_groups || []) {
             groups.set(group, [...(groups.get(group) || []), name]);
@@ -50,7 +70,11 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
             baseUrl,
             apiKey,
             apiFormat: "openai" as const,
-            models: models.sort().map((name) => ({ name, capability: videoModels.has(name) ? ("video" as const) : guessCapability(name) })),
+            models: models.sort().map((name) => ({
+                name,
+                capability: videoModels.has(name) ? ("video" as const) : guessCapability(name),
+                pricing: modelPricing(pricingByName.get(name) || {}, pricing.group_ratio?.[group] ?? 1),
+            })),
         }));
 }
 

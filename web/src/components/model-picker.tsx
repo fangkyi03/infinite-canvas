@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { modelPricingLabel } from "@/lib/model-pricing";
 import { decodeChannelModel, modelOptionLabel, modelOptionName, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
@@ -33,16 +34,17 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
         .map((model) => {
             const channelId = decodeChannelModel(model)?.channelId || "";
             const channel = config.channels.find((item) => item.id === channelId);
-            return channel ? `${channelId}\u0001${channel.name || channelId}\u0001${model}` : "";
+            const price = modelPricingLabel(channel?.models.find((item) => item.name === modelOptionName(model))?.pricing);
+            return channel ? `${channelId}\u0001${channel.name || channelId}\u0001${model}\u0001${price}` : "";
         })
         .filter(Boolean)
         .join("\u0002");
     const cascadeOptions = useMemo(() => {
         const groups = new Map<string, { value: string; label: string; children: Array<{ value: string; label: React.ReactNode; title: string }> }>();
         for (const entry of cascadeGroups ? cascadeGroups.split("\u0002") : []) {
-            const [channelId, channelName, model] = entry.split("\u0001");
+            const [channelId, channelName, model, price] = entry.split("\u0001");
             const group = groups.get(channelId) || { value: channelId, label: channelName, children: [] };
-            group.children.push({ value: model, title: modelOptionName(model), label: <ModelLabelName model={model} /> });
+            group.children.push({ value: model, title: modelOptionName(model), label: <ModelLabelName model={model} price={price} /> });
             groups.set(channelId, group);
         }
         return [...groups.values()];
@@ -180,11 +182,14 @@ function ModelLabel({ config, model }: { config: AiConfig; model: string }) {
     );
 }
 
-function ModelLabelName({ model }: { model: string }) {
+function ModelLabelName({ model, price }: { model: string; price?: string }) {
     return (
         <span className="flex min-w-0 items-center gap-2">
             <ModelIcon model={model} />
-            <span className="truncate">{modelOptionName(model)}</span>
+            <span className="flex min-w-0 flex-col leading-tight">
+                <span className="truncate">{modelOptionName(model)}</span>
+                {price ? <span className="truncate text-xs opacity-60">{price}</span> : null}
+            </span>
         </span>
     );
 }
