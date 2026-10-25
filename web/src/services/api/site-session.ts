@@ -9,7 +9,7 @@ export function isSiteDeployment() {
     return import.meta.env.BASE_URL !== "/";
 }
 
-type PricingModel = { model_name?: string; enable_groups?: string[] };
+type PricingModel = { model_name?: string; enable_groups?: string[]; billing_usage_schema?: Record<string, unknown> };
 type PricingResponse = { data?: PricingModel[]; usable_group?: Record<string, string> };
 
 export class SiteLoginRequiredError extends Error {}
@@ -29,13 +29,15 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
             .then((body) => new Set((body.data || []).map((item) => item.id || ""))),
     ]);
 
-    // 按分组归类当前令牌可调用的模型；default/auto 是通用分组，模型已在各业务分组中列出，不单独展示。
+    // 按 new-api 返回的分组归类当前令牌可调用的模型，分组与站点保持一致（包括 default）。
     const groups = new Map<string, string[]>();
+    // 按秒计费（billing_usage_schema 含 seconds）的是视频模型；名字不含视频关键词时也能识别。
+    const videoModels = new Set<string>();
     for (const item of pricing.data || []) {
         const name = item.model_name || "";
         if (!available.has(name)) continue;
+        if (item.billing_usage_schema && "seconds" in item.billing_usage_schema) videoModels.add(name);
         for (const group of item.enable_groups || []) {
-            if (group === "default" || group === "auto") continue;
             groups.set(group, [...(groups.get(group) || []), name]);
         }
     }
@@ -48,7 +50,7 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
             baseUrl,
             apiKey,
             apiFormat: "openai" as const,
-            models: models.sort().map((name) => ({ name, capability: guessCapability(name) })),
+            models: models.sort().map((name) => ({ name, capability: videoModels.has(name) ? ("video" as const) : guessCapability(name) })),
         }));
 }
 
