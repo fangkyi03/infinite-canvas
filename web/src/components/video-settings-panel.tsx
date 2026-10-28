@@ -1,11 +1,12 @@
 import { type ReactNode } from "react";
-import { Slider } from "antd";
+import { Slider, Switch, Tooltip } from "antd";
+import { CircleHelp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import i18n from "@/i18n";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { clampVideoSeconds, computeVideoSize, inferVideoRatio, parseVideoResolution, readVideoDimensions, VIDEO_SECONDS_MAX, VIDEO_SECONDS_MIN, videoRatioOptions } from "@/lib/media-size";
+import { clampVideoSeconds, supportsVideoFace, computeVideoSize, inferVideoRatio, parseVideoResolution, readVideoDimensions, VIDEO_SECONDS_MAX, VIDEO_SECONDS_MIN, videoRatioOptions } from "@/lib/media-size";
 import { type AiConfig } from "@/stores/use-config-store";
 
 const resolutionOptions = [
@@ -24,7 +25,7 @@ export const videoSecondsRange = { min: VIDEO_SECONDS_MIN, max: VIDEO_SECONDS_MA
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoMode", value: string) => void;
+    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoMode" | "videoFace", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     className?: string;
@@ -100,6 +101,23 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         ))}
                     </div>
                 </SettingGroup>
+                {supportsVideoFace(config.model || config.videoModel) ? <div className="flex items-center justify-between" onMouseDown={(event) => event.stopPropagation()}>
+                    <span className="flex items-center gap-1 text-sm" style={{ color: theme.node.muted }}>
+                        {t("settingsPanels.video.face")}
+                        {/* 弹层挂在面板内部，避免点击提示时被当成面板外点击而关闭设置面板。 */}
+                        <Tooltip
+                            title={t("settingsPanels.video.faceTip")}
+                            trigger="click"
+                            placement="topLeft"
+                            color={theme.node.text}
+                            styles={{ root: { maxWidth: 240 }, container: { color: theme.node.panel, fontSize: 12, lineHeight: 1.6, opacity: 1, boxShadow: "0 6px 20px rgba(0,0,0,.35)" } }}
+                            getPopupContainer={(node) => node.parentElement || document.body}
+                        >
+                            <CircleHelp className="size-3.5 cursor-pointer" />
+                        </Tooltip>
+                    </span>
+                    <Switch size="small" checked={config.videoFace !== "false"} onChange={(checked) => onConfigChange("videoFace", String(checked))} />
+                </div> : null}
             </div>
         </ImageSettingsTheme>
     );

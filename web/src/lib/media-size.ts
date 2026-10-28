@@ -149,3 +149,10 @@ export function readVideoDimensions(size: string, resolution: string, ratio: str
 function evenRound(value: number) {
     return Math.max(2, Math.round(value / 2) * 2);
 }
+
+// 只有该模型支持过人脸参数，开关和 face 请求字段都仅对它生效。
+export function supportsVideoFace(model: string | undefined) {
+    // 带渠道前缀时格式为 "渠道ID::模型名"。
+    const name = (model || "").trim();
+    return name === "special-sd25-720p-05" || name.endsWith("::special-sd25-720p-05");
+}
