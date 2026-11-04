@@ -1,0 +1,81 @@
+---
+title: MCP Mode
+description: Install our MCP server in any AI client to generate videos from the conversation
+---
+
+# MCP Mode
+
+MCP mode exposes video generation as tools that AI clients can call directly. After installing, describe what you want in Claude, Cursor, Codex and other clients, and the AI generates it through our service. Usage is billed to your API key, just like regular API calls.
+
+The **MCP** page in the console (`/mcp-setup`) lets you pick an API key and generates install commands and client configs with the key filled in.
+
+## Easiest way: 3 steps
+
+1. Open the **MCP** page in the console, click **Copy and paste to AI**, and paste the text to your AI (Claude Code, Cursor, Codex, Trae and other AIs that can run commands).
+2. When the browser opens, sign in and click **Authorize**.
+3. Restart the AI app, then simply tell it what to generate.
+
+If your AI cannot run commands (such as a web chat), run the one-click install command below in a terminal yourself.
+
+### Try saying
+
+Start with "Use xaxn" so the AI calls our service instead of answering on its own or picking another tool.
+
+- Use xaxn with SX-2.5 to generate a 30 second video of an astronaut slowly walking on the moon, and send me the video link when it is done.
+- Use xaxn with SX-2.5 to turn this picture into a 30 second video, camera slowly pushing in: (image link)
+- Use xaxn to check which video models I can use.
+
+## Server URL
+
+```
+https://api.xaxn.fun/mcp
+```
+
+Transport is Streamable HTTP, authenticated with the header `Authorization: Bearer sk-xxx`.
+
+## One-click install
+
+The command opens a browser; sign in to the console and confirm the code shown in the terminal. After you authorize, the script uses your API key named `MCP` in the default group, creating it (unlimited quota, never expires) if it does not exist. All later generations are billed to that key.
+
+The script then detects installed AI clients, backs up their config as `*.bak-mcp`, and adds an MCP server named `xaxn`. Restart the client afterwards.
+
+macOS / Linux:
+
+```bash
+curl -fsSL https://api.xaxn.fun/mcp/install.sh | bash
+```
+
+Windows (PowerShell):
+
+```powershell
+& ([scriptblock]::Create((irm https://api.xaxn.fun/mcp/install.ps1)))
+```
+
+To use a specific key and skip browser authorization, append `-s -- sk-xxx` on macOS or `-Token sk-xxx` on Windows.
+
+To uninstall, append `-s -- --uninstall` on macOS or `-Uninstall` on Windows.
+
+## Supported clients
+
+Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Kiro, Trae / Trae CN, Qoder, Codex, Gemini CLI.
+
+- Claude Desktop connects through `mcp-remote` and needs Node.js.
+- For other clients, copy the config snippet from the console MCP page and merge it into the config file.
+
+## Tools
+
+| Tool | Description |
+| --- | --- |
+| `list_models` | List the video models available to the key |
+| `generate_video` | Submit a text-to-video or image-to-video task (`images` takes reference image URLs) and return the task ID |
+| `get_video_task` | Check a video task; returns the video URL when it completes |
+
+Videos usually take minutes. `generate_video` and `get_video_task` accept `wait_seconds` (up to 50); if the task is not done in time, the current status is returned and the AI keeps polling.
+
+## Notes
+
+- Only video generation (text-to-video and image-to-video) is supported for now; direct image generation is not available yet.
+
+- Each video model only accepts certain durations. For example `SX-2.5` only supports **30 seconds**; other values such as 22 are rejected upstream.
+- Generation is billed. The auto-created `MCP` key has unlimited quota; set a quota or disable it under API Keys in the console.
+- The key is written in plain text to local client config files; do not share those files.

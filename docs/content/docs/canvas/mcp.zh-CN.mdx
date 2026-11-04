@@ -1,0 +1,81 @@
+---
+title: MCP 模式
+description: 在任意 AI 客户端安装 MCP，直接在对话中生成视频
+---
+
+# MCP 模式
+
+MCP 模式把视频生成做成 AI 客户端可以直接调用的工具。安装后，在 Claude、Cursor、Codex 等客户端里直接描述需求，AI 就会调用我们的服务完成生成，费用记在你的 API 密钥上，和普通 API 调用一样。
+
+控制台的「MCP」页面（`/mcp-setup`）可以选择 API 密钥，生成填好密钥的安装命令和各客户端配置。
+
+## 最简单的用法：3 步
+
+1. 打开控制台的「MCP」页面，点「复制，粘贴给 AI」，把这段话粘贴给你的 AI（Claude Code、Cursor、Codex、Trae 等能执行命令的 AI）。
+2. 浏览器打开后，登录并点击「授权」。
+3. 重启 AI 应用，直接告诉它你想生成什么。
+
+用的是网页版聊天这类不能执行命令的 AI，就自己在终端运行下面「一键安装」里的命令。
+
+### 试试这样说
+
+开头说「用 xaxn」，AI 就会调用我们的服务，不会自己乱答或用别的工具。
+
+- 用 xaxn 的 SX-2.5 生成一段 30 秒的视频：宇航员在月球上慢慢行走，做好后把视频链接发给我。
+- 用 xaxn 的 SX-2.5 把这张图片做成 30 秒的视频，镜头缓慢推进：（图片链接）
+- 用 xaxn 查一下我能用哪些视频模型。
+
+## 服务地址
+
+```
+https://api.xaxn.fun/mcp
+```
+
+传输方式为 Streamable HTTP，认证使用请求头 `Authorization: Bearer sk-xxx`。
+
+## 一键安装
+
+运行命令后会自动打开浏览器，登录控制台并确认终端里显示的授权码。授权后，脚本会使用你在 default 分组中名为 `MCP` 的令牌，如果没有就自动创建一个（不限额度、永不过期），后续生成都使用这个令牌计费。
+
+接着脚本会检测本机已经安装的 AI 客户端，先把原配置备份为 `*.bak-mcp`，再写入名为 `xaxn` 的 MCP 服务。安装后重启对应客户端即可。
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://api.xaxn.fun/mcp/install.sh | bash
+```
+
+Windows（PowerShell）：
+
+```powershell
+& ([scriptblock]::Create((irm https://api.xaxn.fun/mcp/install.ps1)))
+```
+
+想直接使用指定令牌、跳过浏览器授权：macOS 在命令末尾加 `-s -- sk-xxx`，Windows 加 `-Token sk-xxx`。
+
+卸载：macOS 在命令末尾加 `-s -- --uninstall`，Windows 加 `-Uninstall`。
+
+## 支持的客户端
+
+Claude Code、Claude Desktop、Cursor、VS Code、Windsurf、Kiro、Trae / Trae CN、Qoder、Codex、Gemini CLI。
+
+- Claude Desktop 通过 `mcp-remote` 连接，需要本机安装 Node.js。
+- 其他客户端可以在控制台 MCP 页面复制对应的配置片段，手动合并到配置文件中。
+
+## 可用工具
+
+| 工具 | 说明 |
+| --- | --- |
+| `list_models` | 列出该密钥可用的视频模型 |
+| `generate_video` | 提交文生视频或图生视频任务（`images` 传参考图地址），返回任务 ID |
+| `get_video_task` | 查询视频任务，完成后返回视频地址 |
+
+视频通常需要几分钟。`generate_video` 和 `get_video_task` 支持 `wait_seconds`（最多 50 秒），等待时间内没完成就返回当前状态，AI 会继续查询。
+
+## 注意事项
+
+- 目前只支持生成视频（文生视频、图生视频），暂不支持直接生成图片。
+
+- 每个视频模型只接受特定时长。例如 `SX-2.5` 只支持 **30 秒**，传其他时长（如 22 秒）会被上游拒绝。
+- 生成会实际扣费。自动创建的 `MCP` 令牌不限额度，可以在控制台「API 密钥」里给它设置额度或禁用。
+- 密钥会以明文写入本机客户端的配置文件，不要把这些文件分享给他人。
