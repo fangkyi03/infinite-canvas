@@ -23,6 +23,7 @@ MCP 模式把视频生成做成 AI 客户端可以直接调用的工具。安装
 
 - 用 xaxn 的 SX-2.5 生成一段 30 秒的视频：宇航员在月球上慢慢行走，做好后把视频链接发给我。
 - 用 xaxn 的 SX-2.5 把这张图片做成 30 秒的视频，镜头缓慢推进：（图片链接）
+- 用 xaxn 看看我最近提交的视频任务，每个进行到哪了。
 - 用 xaxn 查一下我能用哪些视频模型。
 
 ## 服务地址
@@ -69,6 +70,7 @@ Claude Code、Claude Desktop、Cursor、VS Code、Windsurf、Kiro、Trae / Trae 
 | `list_models` | 列出该密钥可用的视频模型 |
 | `generate_video` | 提交文生视频或图生视频任务（`images` 传参考图地址），返回任务 ID |
 | `get_video_task` | 查询视频任务，完成后返回视频地址 |
+| `list_video_tasks` | 列出你最近提交的视频任务，以及每个任务的状态和进度 |
 
 视频通常需要几分钟。`generate_video` 和 `get_video_task` 支持 `wait_seconds`（最多 50 秒），等待时间内没完成就返回当前状态，AI 会继续查询。
 

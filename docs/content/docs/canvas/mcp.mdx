@@ -23,6 +23,7 @@ Start with "Use xaxn" so the AI calls our service instead of answering on its ow
 
 - Use xaxn with SX-2.5 to generate a 30 second video of an astronaut slowly walking on the moon, and send me the video link when it is done.
 - Use xaxn with SX-2.5 to turn this picture into a 30 second video, camera slowly pushing in: (image link)
+- Use xaxn to show my recent video tasks and how far along each one is.
 - Use xaxn to check which video models I can use.
 
 ## Server URL
@@ -69,6 +70,7 @@ Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Kiro, Trae / Trae CN, Qo
 | `list_models` | List the video models available to the key |
 | `generate_video` | Submit a text-to-video or image-to-video task (`images` takes reference image URLs) and return the task ID |
 | `get_video_task` | Check a video task; returns the video URL when it completes |
+| `list_video_tasks` | List your recent video tasks with their status and progress |
 
 Videos usually take minutes. `generate_video` and `get_video_task` accept `wait_seconds` (up to 50); if the task is not done in time, the current status is returned and the AI keeps polling.
 
