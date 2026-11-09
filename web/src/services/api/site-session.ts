@@ -21,12 +21,16 @@ type PricingResponse = { data?: PricingModel[]; usable_group?: Record<string, st
 
 // 按秒计费的表达式形如 tier("base", u("seconds") * 0.25)，系数即每秒单价。
 const PER_SECOND_EXPR = /u\("seconds"\)\s*\*\s*([\d.]+)/;
+// 按张计费的生图表达式形如 tier("base", u("image_count") * 0.03)，系数即每张单价。
+const PER_IMAGE_EXPR = /u\("image_count"\)\s*\*\s*([\d.]+)/;
 
-/** 同步上游价格：按次计费取每条单价，按秒表达式取每秒单价，再乘以分组倍率。 */
+/** 同步上游价格：按次计费取每条单价，按秒表达式取每秒单价，按张表达式取每张单价，再乘以分组倍率。 */
 function modelPricing(item: PricingModel, groupRatio: number): ModelPricing | undefined {
     if (item.quota_type === 1 && item.model_price) return { amount: item.model_price * groupRatio, unit: "call" };
     const perSecond = Number(item.billing_expr?.match(PER_SECOND_EXPR)?.[1]);
     if (perSecond) return { amount: perSecond * groupRatio, unit: "second" };
+    const perImage = Number(item.billing_expr?.match(PER_IMAGE_EXPR)?.[1]);
+    if (perImage) return { amount: perImage * groupRatio, unit: "call" };
     return undefined;
 }
 
@@ -72,7 +76,8 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
             apiFormat: "openai" as const,
             models: models.sort().map((name) => ({
                 name,
-                capability: videoModels.has(name) ? ("video" as const) : guessCapability(name),
+                // 主站的视频插件认领全部模型，生图模型也会带上 seconds 字段；名字能认出生图时以名字为准。
+                capability: videoModels.has(name) && guessCapability(name) !== "image" ? ("video" as const) : guessCapability(name),
                 pricing: modelPricing(pricingByName.get(name) || {}, pricing.group_ratio?.[group] ?? 1),
             })),
         }));
