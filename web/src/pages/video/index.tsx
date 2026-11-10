@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent } fro
 import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Tag, Typography } from "antd";
 import localforage from "localforage";
 import { nanoid } from "nanoid";
-import { saveAs } from "file-saver";
+import { useDownloadVideo } from "@/hooks/use-download-video";
 import { useTranslation } from "react-i18next";
 
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
@@ -69,6 +69,7 @@ const LOG_STORE_KEY = "infinite-canvas:video_generation_logs";
 const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 export default function VideoPage() {
+    const downloadVideoFile = useDownloadVideo();
     const { message } = App.useApp();
     const { t } = useTranslation();
     useSyncExternalStore(subscribeImagePreviews, getImagePreviewRevision);
@@ -240,7 +241,7 @@ export default function VideoPage() {
     };
 
     const downloadVideo = (video: GeneratedVideo) => {
-        saveAs(video.url, "video.mp4");
+        downloadVideoFile(video.url, "video.mp4");
     };
 
     const saveResultToAssets = (video: GeneratedVideo) => {

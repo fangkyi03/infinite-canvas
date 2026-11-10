@@ -3,6 +3,7 @@ import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, Mous
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Group, Video } from "lucide-react";
 import { saveAs } from "file-saver";
+import { useDownloadVideo } from "@/hooks/use-download-video";
 import { useTranslation } from "react-i18next";
 
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
@@ -167,6 +168,7 @@ function measureFocusFrame(container: HTMLDivElement | null, nodeId: string) {
 }
 
 function InfiniteCanvasPage() {
+    const downloadVideoFile = useDownloadVideo();
     const { message, modal } = App.useApp();
     const { t } = useTranslation();
     // Subscribe to the registry version so plugin registration changes rerender the canvas.
@@ -1816,8 +1818,12 @@ function InfiniteCanvasPage() {
 
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
         if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
-        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
-    }, []);
+        if (node.type === CanvasNodeType.Video) {
+            downloadVideoFile(node.metadata.content, `canvas-video-${node.id}.mp4`);
+            return;
+        }
+        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
+    }, [downloadVideoFile]);
 
     const downloadBatchImage = useCallback((node: CanvasNodeData, imageId: string) => {
         const image = node.metadata?.images?.find((item) => item.id === imageId);

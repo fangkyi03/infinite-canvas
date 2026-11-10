@@ -5,6 +5,7 @@ import { saveAs } from "file-saver";
 import { useTranslation } from "react-i18next";
 
 import { useCopyText } from "@/hooks/use-copy-text";
+import { useDownloadVideo } from "@/hooks/use-download-video";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob, getImagePreviewRevision, subscribeImagePreviews, uploadImage } from "@/services/image-storage";
@@ -30,6 +31,7 @@ export default function AssetsPage() {
     const { message } = App.useApp();
     const { t } = useTranslation();
     const copyText = useCopyText();
+    const downloadVideoFile = useDownloadVideo();
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -146,13 +148,19 @@ export default function AssetsPage() {
 
     const downloadImage = async (asset: Asset) => {
         if (asset.kind !== "image" && asset.kind !== "video") return;
+        if (asset.kind === "video") {
+            if (!asset.data.url) return void message.error(t("assets.downloadFailed"));
+            const ext = asset.data.mimeType?.split("/")[1]?.split("+")[0] || "mp4";
+            downloadVideoFile(asset.data.url, `${asset.title || "asset"}.${ext}`);
+            return;
+        }
         try {
             const blob = await readAssetMediaBlob(asset);
             if (!blob) {
                 message.error(t("assets.downloadFailed"));
                 return;
             }
-            const ext = asset.data.mimeType?.split("/")[1]?.split("+")[0] || (asset.kind === "video" ? "mp4" : "png");
+            const ext = asset.data.mimeType?.split("/")[1]?.split("+")[0] || "png";
             saveAs(blob, `${asset.title || "asset"}.${ext}`);
         } catch {
             message.error(t("assets.downloadFailed"));
