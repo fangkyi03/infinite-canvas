@@ -186,7 +186,7 @@ export default {
     },
     videoWorkbench: {
         title: "Video Studio",
-        promptPlaceholder: "Describe camera movement, subject action, atmosphere, and visual style",
+        promptPlaceholder: "Describe camera movement, subject action, atmosphere, and visual style. Type @ to mention a reference image.",
         references: "Reference images",
         videoReferences: "Reference videos",
         audioReferences: "Reference audio",
@@ -194,7 +194,7 @@ export default {
         removeVideo: "Remove reference video",
         removeAudio: "Remove reference audio",
         dropReferences: "Drop to upload reference assets",
-        noImages: "No reference images. Drag in up to 9 files.",
+        noImages: "No reference images. Drag in up to 30 files.",
         noVideos: "No reference videos. Drag in up to 3 files.",
         noAudio: "No reference audio. Drag in up to 3 MP3/WAV files, each under 15 MB.",
         unsupportedFiles: "Unsupported reference assets were ignored. Use images, MP4/MOV video, or MP3/WAV audio.",
