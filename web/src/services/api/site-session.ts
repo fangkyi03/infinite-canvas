@@ -1,4 +1,4 @@
-import { guessCapability, type ModelChannel, type ModelPricing } from "@/stores/use-config-store";
+import { guessCapability, type ModelCapability, type ModelChannel, type ModelPricing } from "@/stores/use-config-store";
 
 // 画布部署在 new-api 同域名的子路径（/canvas/）下时，直接用 new-api 的登录状态：
 // 用 Refresh Cookie 换取当前用户专属的 Canvas 令牌，并按 new-api 分组生成渠道，
@@ -16,7 +16,21 @@ type PricingModel = {
     quota_type?: number;
     model_price?: number;
     billing_expr?: string;
+    capabilityConfig?: { video?: unknown; image?: unknown };
+    supported_endpoint_types?: string[];
 };
+
+/**
+ * 模型类型以 new-api 模型管理里的能力配置为准，不依赖模型名：
+ * 配了视频能力 → 视频；配了图片能力或支持生图接口 → 生图；
+ * 都没配时，按秒计费的是视频（名字认出生图的除外），最后才按名字猜。
+ */
+function siteModelCapability(name: string, item: PricingModel | undefined, perSecond: boolean): ModelCapability {
+    if (item?.capabilityConfig?.video) return "video";
+    if (item?.capabilityConfig?.image || item?.supported_endpoint_types?.includes("image-generation")) return "image";
+    const guessed = guessCapability(name);
+    return perSecond && guessed !== "image" ? "video" : guessed;
+}
 type PricingResponse = { data?: PricingModel[]; usable_group?: Record<string, string>; group_ratio?: Record<string, number> };
 
 // 按秒计费的表达式形如 tier("base", u("seconds") * 0.25)，系数即每秒单价。
@@ -77,7 +91,7 @@ export async function loadSiteChannels(): Promise<ModelChannel[]> {
             models: models.sort().map((name) => ({
                 name,
                 // 主站的视频插件认领全部模型，生图模型也会带上 seconds 字段；名字能认出生图时以名字为准。
-                capability: videoModels.has(name) && guessCapability(name) !== "image" ? ("video" as const) : guessCapability(name),
+                capability: siteModelCapability(name, pricingByName.get(name), videoModels.has(name)),
                 pricing: modelPricing(pricingByName.get(name) || {}, pricing.group_ratio?.[group] ?? 1),
             })),
         }));
