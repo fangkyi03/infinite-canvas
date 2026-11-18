@@ -9,7 +9,6 @@ import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 import { canUploadReferencesToR2, getMirroredR2Url, uploadReferenceToR2 } from "./r2-upload";
-import { isSiteDeployment } from "./site-session";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -185,25 +184,10 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
         referenceUrls.videos.forEach((url) => body.append("videos", url));
         referenceUrls.audios.forEach((url) => body.append("audios", url));
     } else {
-        // 主站只读 images 字段（image[]/first_frame/last_frame 仅在缺少 images 时作别名），且限制
-        // multipart 最多 32 个文件；同一张图再追加别名会让文件数翻倍，17 张参考图即超限。
-        // 其他 OpenAI 兼容接口可能只认别名字段，保留原来的双字段写法。
-        const sameSite = isSiteDeployment() && new URL(config.baseUrl, window.location.origin).origin === window.location.origin;
-        if (mode === "frames") {
-            if (images[0]) {
-                if (!sameSite) body.append("first_frame", images[0], "first.png");
-                body.append("images", images[0], "first.png");
-            }
-            if (images[1]) {
-                if (!sameSite) body.append("last_frame", images[1], "last.png");
-                body.append("images", images[1], "last.png");
-            }
-        } else {
-            images.forEach((file, idx) => {
-                if (!sameSite) body.append("image[]", file, `ref_${idx + 1}.png`);
-                body.append("images", file, `ref_${idx + 1}.png`);
-            });
-        }
+        // 每张图只提交一次 images（首尾帧按顺序即首帧、尾帧）；同一文件再追加 image[]/first_frame
+        // 等别名会让文件数翻倍，触发主站 multipart 最多 32 个文件的限制。
+        const frames = mode === "frames";
+        (frames ? images.slice(0, 2) : images).forEach((file, idx) => body.append("images", file, frames ? (idx === 0 ? "first.png" : "last.png") : `ref_${idx + 1}.png`));
     }
     if (!referenceUrls) {
         videos.forEach((file) => body.append("video[]", file));
