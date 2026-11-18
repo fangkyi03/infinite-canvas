@@ -9,6 +9,7 @@ import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, withLocalProxy, type AiConfig } from "@/stores/use-config-store";
 import { runModelPlugin } from "./model-plugin";
 import { canUploadReferencesToR2, getMirroredR2Url, uploadReferenceToR2 } from "./r2-upload";
+import { isSiteDeployment } from "./site-session";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -183,20 +184,26 @@ async function createOpenAIVideoTask(config: AiConfig, model: string, prompt: st
         referenceUrls.images.forEach((url) => body.append("images", url));
         referenceUrls.videos.forEach((url) => body.append("videos", url));
         referenceUrls.audios.forEach((url) => body.append("audios", url));
-    } else if (mode === "frames") {
-        if (images[0]) {
-            body.append("first_frame", images[0], "first.png");
-            body.append("images", images[0], "first.png");
-        }
-        if (images[1]) {
-            body.append("last_frame", images[1], "last.png");
-            body.append("images", images[1], "last.png");
-        }
     } else {
-        images.forEach((file, idx) => {
-            body.append("image[]", file, `ref_${idx + 1}.png`);
-            body.append("images", file, `ref_${idx + 1}.png`);
-        });
+        // 主站只读 images 字段（image[]/first_frame/last_frame 仅在缺少 images 时作别名），且限制
+        // multipart 最多 32 个文件；同一张图再追加别名会让文件数翻倍，17 张参考图即超限。
+        // 其他 OpenAI 兼容接口可能只认别名字段，保留原来的双字段写法。
+        const sameSite = isSiteDeployment() && new URL(config.baseUrl, window.location.origin).origin === window.location.origin;
+        if (mode === "frames") {
+            if (images[0]) {
+                if (!sameSite) body.append("first_frame", images[0], "first.png");
+                body.append("images", images[0], "first.png");
+            }
+            if (images[1]) {
+                if (!sameSite) body.append("last_frame", images[1], "last.png");
+                body.append("images", images[1], "last.png");
+            }
+        } else {
+            images.forEach((file, idx) => {
+                if (!sameSite) body.append("image[]", file, `ref_${idx + 1}.png`);
+                body.append("images", file, `ref_${idx + 1}.png`);
+            });
+        }
     }
     if (!referenceUrls) {
         videos.forEach((file) => body.append("video[]", file));
